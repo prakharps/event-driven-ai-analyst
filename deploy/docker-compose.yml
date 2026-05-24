@@ -1,0 +1,90 @@
+networks:
+  ai-analyst-network:
+    driver: bridge
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - ai-analyst-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - ai-analyst-network
+
+  init-kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - kafka
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: |
+      "
+      # Block until Kafka is reachable
+      kafka-topics --bootstrap-server kafka:29092 --list
+      echo 'Creating Kafka topics...'
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic incoming-tickets --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic resolved-tickets --partitions 3 --replication-factor 1
+      echo 'Successfully created topics:'
+      kafka-topics --bootstrap-server kafka:29092 --list
+      "
+    networks:
+      - ai-analyst-network
+
+  mysql-db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: business_db
+      MYSQL_USER: analyst_user
+      MYSQL_PASSWORD: analyst_password
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - ai-analyst-network
+  
+  ingestion-service:
+    build:
+      context: ../services/ingestion-service
+      dockerfile: Dockerfile
+    depends_on:
+      - kafka
+    environment:
+      - PYTHONUNBUFFERED=1 # Forces Python to flush logs immediately to stdout
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    networks:
+      - ai-analyst-network
+
+  ai-processing-engine:
+    build:
+      context: ../services/ai-processing-engine
+      dockerfile: Dockerfile
+    depends_on:
+      - kafka
+      - mysql-db
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - DB_HOST=mysql-db
+      - DB_USER=analyst_user
+      - DB_PASSWORD=analyst_password
+      - DB_NAME=business_db
+    networks:
+      - ai-analyst-network

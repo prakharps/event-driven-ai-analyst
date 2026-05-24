@@ -7,6 +7,7 @@ from config.settings import AppSettings
 from config.kafka_client import initialize_kafka_producer, initialize_kafka_consumer
 from services.langchain_agent import LangChainAgent
 from services.dlq_router import DLQRouter
+from services.vector_memory import VectorMemoryStore
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("AIProcessingEngine")
@@ -22,6 +23,7 @@ def main():
     # Initialize our modular LangChain agent
     ai_agent = LangChainAgent()
     dlq_router = DLQRouter(producer)
+    vector_memory = VectorMemoryStore()
 
     logger.info(f"Connected to Broker. Subscribed to topic: {AppSettings.TOPIC_INCOMING}")
 
@@ -53,10 +55,18 @@ def main():
                 )
                 continue
 
+            # --- Semantic Memory Retrieval (RAG) ---
+            try:
+                logger.info(f"Retrieving semantic memory for ticket {ticket_id}...")
+                historical_cases = vector_memory.find_similar_cases(issue_text, limit=1)
+            except Exception as rag_err:
+                logger.warning(f"Non-fatal RAG query breakdown: {rag_err}. Proceeding with clean slate.")
+                historical_cases = "No historical context available."
+
             # Step 2: AI Prompt Execution
             try:
                 logger.info(f"Invoking Modular LLM Chain for ticket {ticket_id}...")
-                resolution_result = ai_agent.resolve_ticket(ticket_id, issue_text, context)
+                resolution_result = ai_agent.resolve_ticket(ticket_id, issue_text, context, historical_cases)
 
                 if hasattr(resolution_result, "model_dump"):
                     resolution_data = resolution_result.model_dump()
@@ -85,6 +95,13 @@ def main():
             logger.info(f"AI Resolution Complete. Priority calculated as: {outbound_payload['resolution']['priority_level']}")
             producer.send(AppSettings.TOPIC_RESOLVED, value=outbound_payload).get(timeout=10)
             logger.info(f"Successfully broadcasted payload for {ticket_id} to '{AppSettings.TOPIC_RESOLVED}'.")
+
+            # Commit this live interaction to the vector store so the system 'learns' it instantly!
+            try:
+                logger.info(f"Committing ticket {ticket_id} metrics to vector knowledge base...")
+                vector_memory.save_new_resolution(issue_text, resolution_data)
+            except Exception as mem_err:
+                logger.error(f"Non-fatal error updating memory sub-system: {mem_err}")
                 
         except Exception as global_err:
             # --- STAGE 4: Catch-All Global Safety Net ---

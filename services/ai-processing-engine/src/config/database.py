@@ -13,7 +13,7 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
-def fetch_customer_context(customer_id):
+def fetch_customer_context(customer_id: str):
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:

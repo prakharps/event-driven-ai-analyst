@@ -15,6 +15,9 @@ class AppSettings:
     DB_USER = os.getenv('DB_USER', 'analyst_user')
     DB_PASS = os.getenv('DB_PASSWORD', 'analyst_password')
     DB_NAME = os.getenv('DB_NAME', 'business_db')
+
+    # Vector Memory Settings
+    CHROMA_PERSIST_DIR = os.getenv('CHROMA_PERSIST_DIR', '/app/chroma_db')
     
     # AI Engine Hyperparameters
     OPENAI_MODEL = "gpt-4o-mini"

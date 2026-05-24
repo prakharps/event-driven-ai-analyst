@@ -1,26 +1,34 @@
-# Autonomous AI-Driven Incident Orchestration Pipeline
+# Autonomous AI Incident Resolution Engine & Real-Time Telemetry Plane
 
-An enterprise-grade, asynchronous event-driven data plane designed to intercept corporate support tickets, enrich incoming data streams with relational customer metadata, map issues to structural targets via LLM reasoning models, and broadcast automated resolutions to downstream communication brokers.
+An enterprise-grade, event-driven microservices architecture that ingests system incidents, runs real-time Retrieval-Augmented Generation (RAG) to determine mitigation strategies, commits learnings to a vector space, and streams live telemetry to an operations dashboard.
 
-## 🏗️ System Architecture & Data Flow
+---
 
-The platform relies on a decoupled, asynchronous multi-container infrastructure coordinated entirely via a virtual bridge network plane:
+## 🏗️ System Architecture Topology
 
-1. **Ingestion Layer:** Raw support events flow into the `incoming-tickets` event streaming topic.
-2. **Context Enrichment Engine:** A Python application intercepts events, handles schema alignment, and executes quick context-enrichment queries against a transactional datastore.
-3. **Structured AI Core:** The ingestion loop builds contextual instruction models, invoking modular LangChain pipelines to evaluate enterprise priority thresholds and calculate automated responses.
-4. **Outbound Broadcasting:** Successfully processed payloads are verified against strict structural schemas and published onto the `resolved-tickets` streaming topic.
-5. **Fault Isolation (DLQ):** Poison pills, API bottlenecks, or parsing failures trigger granular exception containment routers that isolate malformed payloads into a dedicated `malformed-tickets` Dead Letter Queue (DLQ).
+The platform consists of five decoupled services coordinating over an internal Docker network bridge via a high-throughput event bus:
 
-## 🛠️ Tech Stack & Blueprint Dependencies
+1. **Ingestion Service**: Simulates/Ingests incoming raw system failure events.
+2. **Apache Kafka Cluster**: Manages immutable log partitions (`incoming-tickets` and `resolved-tickets`).
+3. **AI Processing Engine**: Asynchronous worker pool utilizing LangChain/OpenAI to run RAG analytics.
+4. **Data Layers**: 
+   - **MySQL**: Relational ledger tracking core incident configurations and historical metrics.
+   - **ChromaDB**: High-performance vector database housing long-term cognitive semantic memory.
+5. **Live Dashboard (FastAPI)**: Non-blocking service utilizing `aiokafka` background workers and bi-directional **WebSockets** to stream live insights to the client UI.
 
-*   **Runtime Core:** Python 3.11
-*   **Orchestration & Event Streaming:** Apache Kafka (Distributed Clusters)
-*   **Relational Datastore:** MySQL 8.0
-*   **AI Engine Infrastructure:** LangChain Core, OpenAI API Engine (`gpt-4o-mini`)
-*   **Container Virtualization:** Docker, Docker Compose
+## 🛠️ Tech Stack & Patterns
 
-## 🚀 Getting Started & Initialization
+- **Backend Framework**: FastAPI (Asynchronous Concurrency Loop)
+- **Event Streaming**: Apache Kafka / Zookeeper (`aiokafka` client wrapper)
+- **AI/LLM Stack**: OpenAI GPT-4 API / Embedding Engine
+- **Vector Infrastructure**: ChromaDB (Semantic Memory Embedding Cache)
+- **Database**: MySQL 8.0 (Relational Operational Store)
+- **Frontend UI**: Native HTML5 WebSockets, Tailwind CSS, Chart.js (Zero-Framework overhead)
+- **Containerization**: Docker / Docker Compose (Multi-stage cross-platform build pipelines)
+
+---
+
+## 🚀 Quick Start / Deployment
 
 ### Prerequisites
 Ensure your host machine has Docker and Docker Compose installed.

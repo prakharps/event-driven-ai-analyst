@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Ops Center - Live Telemetry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+    <div class="container mx-auto px-6 py-8">
+        <header class="flex justify-between items-center border-b border-gray-800 pb-5 mb-8">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                    <span class="h-3 w-3 bg-green-500 rounded-full animate-ping"></span>
+                    AI Incident Resolution Control Center
+                </h1>
+                <p class="text-gray-400 mt-1">Real-time Kafka Stream Analysis Plane via WebSockets</p>
+            </div>
+            <div id="connection-badge" class="bg-red-950 text-red-400 border border-red-800 px-4 py-2 rounded-full font-mono text-sm">
+                DISCONNECTED
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl shadow-lg">
+                <p class="text-gray-400 font-medium uppercase text-xs tracking-wider">Total AI Iterations</p>
+                <p id="counter-total" class="text-4xl font-extrabold text-blue-400 mt-2">0</p>
+            </div>
+            <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl shadow-lg">
+                <p class="text-gray-400 font-medium uppercase text-xs tracking-wider">Escalated Critical Incidents</p>
+                <p id="counter-critical" class="text-4xl font-extrabold text-red-500 mt-2">0</p>
+            </div>
+            <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl shadow-lg">
+                <p class="text-gray-400 font-medium uppercase text-xs tracking-wider">Avg Latency Plane</p>
+                <p class="text-4xl font-extrabold text-green-400 mt-2">Sub-Second</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl shadow-lg lg:col-span-1">
+                <h2 class="text-lg font-bold text-white mb-4">Live Severity Profile</h2>
+                <div class="relative max-w-xs mx-auto">
+                    <canvas id="severityChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl shadow-lg lg:col-span-2 flex flex-col h-[400px]">
+                <h2 class="text-lg font-bold text-white mb-4">Pipeline Execution Log Ledger</h2>
+                <div class="overflow-y-auto flex-1 font-mono text-xs space-y-2 pr-2" id="log-ledger">
+                    <p class="text-gray-500 italic">Awaiting connection events over socket pipe channel...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Metrics Counters Store
+        let metrics = { total: 0, critical: 0, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+
+        // Initialize Native ChartJS Layout
+        const ctx = document.getElementById('severityChart').getContext('2d');
+        const severityChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Critical', 'High', 'Medium', 'Low'],
+                datasets: [{
+                    data: [0, 0, 0, 0],
+                    backgroundColor: ['#ef4444', '#f97316', '#eab308', '#10b981'],
+                    borderWidth: 0
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af' } } } }
+        });
+
+        // Initialize Persistent Loop Handshake to WebSocket Route
+        function connect() {
+            const wsScheme = window.location.protocol === "https:" ? "wss://" : "ws://";
+            const ws = new WebSocket(wsScheme + window.location.host + "/ws/metrics");
+            const badge = document.getElementById("connection-badge");
+
+            ws.onopen = () => {
+                badge.innerText = "CONNECTED LIVE";
+                badge.className = "bg-green-950 text-green-400 border border-green-800 px-4 py-2 rounded-full font-mono text-sm";
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                // Unpack deep nested JSON attributes safely
+                const ticketId = data.ticket_id;
+                const priority = data.resolution.priority_level.toUpperCase();
+                const action = data.resolution.suggested_action;
+                const sentiment = data.resolution.sentiment_analysis;
+
+                // Update Metrics Values
+                metrics.total++;
+                if (priority === 'CRITICAL') metrics.critical++;
+                metrics[priority] = (metrics[priority] || 0) + 1;
+
+                // Bind updated counts to UI DOM components
+                document.getElementById("counter-total").innerText = metrics.total;
+                document.getElementById("counter-critical").innerText = metrics.critical;
+
+                // Update Chart.js datasets dynamically without structural redraw flashes
+                severityChart.data.datasets[0].data = [metrics.CRITICAL, metrics.HIGH, metrics.MEDIUM, metrics.LOW];
+                severityChart.update();
+
+                // Append running items to scroll ledger panel
+                const ledger = document.getElementById("log-ledger");
+                if(metrics.total === 1) ledger.innerHTML = ''; // Wipe welcome placeholder string
+                
+                let badgeColor = priority === 'CRITICAL' ? 'text-red-400' : priority === 'HIGH' ? 'text-orange-400' : 'text-yellow-400';
+                
+                const logItem = document.createElement("div");
+                logItem.className = "p-3 bg-gray-900 border border-gray-800 rounded-md flex flex-col gap-1 border-l-4 " + (priority === 'CRITICAL' ? 'border-l-red-500' : 'border-l-blue-500');
+                logItem.innerHTML = `
+                    <div class="flex justify-between font-bold text-gray-300">
+                        <span>🚀 Ticket: ${ticketId}</span>
+                        <span class="${badgeColor}">[${priority}]</span>
+                    </div>
+                    <div class="text-gray-400 mt-1">💡 <span class="font-semibold">Action Plan:</span> ${action}</div>
+                    <div class="text-gray-500 italic text-[11px] mt-0.5">🎭 Sentiment Analyzed: ${sentiment}</div>
+                `;
+                ledger.prepend(logItem);
+            };
+
+            ws.onclose = () => {
+                badge.innerText = "CONNECTION LOSS - RETRYING";
+                badge.className = "bg-orange-950 text-orange-400 border border-orange-800 px-4 py-2 rounded-full font-mono text-sm";
+                setTimeout(connect, 3000); // Backoff retry logic hook
+            };
+        }
+
+        connect();
+    </script>
+</body>
+</html>

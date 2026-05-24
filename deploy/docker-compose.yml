@@ -1,3 +1,5 @@
+version: '3.8'
+
 networks:
   ai-analyst-network:
     driver: bridge
@@ -5,6 +7,7 @@ networks:
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -13,6 +16,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
     depends_on:
       - zookeeper
     ports:
@@ -29,24 +33,25 @@ services:
 
   init-kafka:
     image: confluentinc/cp-kafka:7.4.0
+    container_name: init-kafka
     depends_on:
       - kafka
     entrypoint: [ "/bin/sh", "-c" ]
     command: |
-      "
       # Block until Kafka is reachable
+      echo 'Awaiting Kafka broker availability...'
       kafka-topics --bootstrap-server kafka:29092 --list
       echo 'Creating Kafka topics...'
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic incoming-tickets --partitions 3 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic resolved-tickets --partitions 3 --replication-factor 1
       echo 'Successfully created topics:'
       kafka-topics --bootstrap-server kafka:29092 --list
-      "
     networks:
       - ai-analyst-network
 
   mysql-db:
     image: mysql:8.0
+    container_name: mysql-db
     ports:
       - "3306:3306"
     environment:
@@ -63,10 +68,11 @@ services:
     build:
       context: ../services/ingestion-service
       dockerfile: Dockerfile
+    container_name: ingestion-service
     depends_on:
       - kafka
     environment:
-      - PYTHONUNBUFFERED=1 # Forces Python to flush logs immediately to stdout
+      - PYTHONUNBUFFERED=1
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     networks:
       - ai-analyst-network
@@ -75,6 +81,7 @@ services:
     build:
       context: ../services/ai-processing-engine
       dockerfile: Dockerfile
+    container_name: ai-processing-engine
     depends_on:
       - kafka
       - mysql-db
@@ -86,5 +93,19 @@ services:
       - DB_USER=analyst_user
       - DB_PASSWORD=analyst_password
       - DB_NAME=business_db
+    networks:
+      - ai-analyst-network
+
+  live-dashboard:
+    build:
+      context: ../services/live-dashboard
+      dockerfile: Dockerfile
+    container_name: live-dashboard
+    ports:
+      - "8000:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - kafka
     networks:
       - ai-analyst-network

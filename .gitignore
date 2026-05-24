@@ -1,0 +1,32 @@
+# === Core Python & Cache ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.poetry/
+
+# === Container & Infrastructure Deltas ===
+.docker/
+deploy/data/
+deploy/mysql_data/
+deploy/kafka_data/
+
+# === Application Local Storages ===
+services/ai-processing-engine/src/chroma_db/
+services/ai-processing-engine/src/.chroma/
+*.db
+*.sqlite
+
+# === System & IDE configurations ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
